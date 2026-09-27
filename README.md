@@ -156,8 +156,8 @@ EXPO_PUBLIC_REVENUECAT_API_KEY=test_replace_with_your_public_sdk_key
 
 The RevenueCat dashboard must contain this exact relationship:
 
-1. An entitlement with identifier `plus`.
-2. A monthly Test Store subscription product attached to `plus`.
+1. An entitlement with identifier `foundit_plus`.
+2. A monthly Test Store subscription product attached to `foundit_plus`.
 3. That product in RevenueCat's predefined monthly package (`$rc_monthly`).
 4. The monthly package in an offering with identifier `default`.
 5. `default` selected as the project's current offering.
@@ -165,8 +165,10 @@ The RevenueCat dashboard must contain this exact relationship:
 The app loads `Purchases.getOfferings()`, uses only `offerings.current`, and
 requires that current offering to be `default` with a monthly package. The
 displayed price comes from RevenueCat. Purchase and restore results unlock Plus
-only when `customerInfo.entitlements.active.plus` exists. CustomerInfo updates
-are also observed while the app is running.
+only when
+`customerInfo.entitlements.active[FOUND_IT_PLUS_ENTITLEMENT_ID]` exists, where
+the centralized identifier is `foundit_plus`. CustomerInfo updates are also
+observed while the app is running.
 
 Free includes one prepared space. Plus includes unlimited prepared spaces.
 Recording and saving local memories remain available, existing memories are
@@ -201,8 +203,8 @@ On the Plus screen, confirm the development diagnostic says that the SDK and
 current `default` offering are loaded. Tap the monthly purchase button, choose a
 Test Store outcome, and confirm a successful result changes **Plus active** to
 **yes**. Cancellation and failure must leave the account on Free. **Restore
-purchases** must grant access only when RevenueCat returns an active `plus`
-entitlement.
+purchases** must grant access only when RevenueCat returns an active
+`foundit_plus` entitlement.
 
 ## Privacy and limitations
 

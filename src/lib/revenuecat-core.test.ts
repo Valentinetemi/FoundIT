@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  FOUND_IT_PLUS_ENTITLEMENT_ID,
   hasActivePlus,
   purchaseMonthlyPackage,
   resolveMonthlyOffering,
@@ -13,7 +14,13 @@ const freeCustomer: CustomerInfoLike = {
   entitlements: { active: {} },
 };
 const plusCustomer: CustomerInfoLike = {
-  entitlements: { active: { plus: { identifier: 'plus' } } },
+  entitlements: {
+    active: {
+      [FOUND_IT_PLUS_ENTITLEMENT_ID]: {
+        identifier: FOUND_IT_PLUS_ENTITLEMENT_ID,
+      },
+    },
+  },
 };
 const monthlyPackage = {
   identifier: '$rc_monthly',
@@ -24,7 +31,7 @@ test('a customer without the plus entitlement remains free', () => {
   assert.equal(hasActivePlus(freeCustomer), false);
 });
 
-test('customerInfo.entitlements.active.plus unlocks Plus', () => {
+test('the centralized foundit_plus entitlement unlocks Plus', () => {
   assert.equal(hasActivePlus(plusCustomer), true);
 });
 

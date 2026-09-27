@@ -1,4 +1,4 @@
-export const PLUS_ENTITLEMENT_IDENTIFIER = 'plus';
+export const FOUND_IT_PLUS_ENTITLEMENT_ID = 'foundit_plus';
 export const CURRENT_OFFERING_IDENTIFIER = 'default';
 
 export type CustomerInfoLike = {
@@ -56,7 +56,9 @@ export type RestoreOutcome =
   | { status: 'failed' };
 
 export function hasActivePlus(customerInfo: CustomerInfoLike): boolean {
-  return Boolean(customerInfo.entitlements.active[PLUS_ENTITLEMENT_IDENTIFIER]);
+  return Boolean(
+    customerInfo.entitlements.active[FOUND_IT_PLUS_ENTITLEMENT_ID],
+  );
 }
 
 export function resolveMonthlyOffering<

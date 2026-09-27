@@ -305,7 +305,7 @@ export function PlusScreen() {
 
           <Text style={styles.disclaimer}>
             Purchases are handled by RevenueCat. Plus is granted only when the
-            returned CustomerInfo contains an active “plus” entitlement.
+            returned CustomerInfo contains an active “foundit_plus” entitlement.
           </Text>
 
           {__DEV__ ? (
