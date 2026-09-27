@@ -24,10 +24,10 @@ expo-env.d.ts
 google-services.json
 GoogleService-Info.plist
 
-# Local environment files
+# Local environment files and hackathon workflow state
 .env
 .env.*
-!.env.example
+.devpost-hackathon-state.json
 
 # Logs and tooling
 .metro-health-check*

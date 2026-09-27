@@ -7,6 +7,9 @@ then ask where an object was last seen in that recording. FoundIt returns the
 most relevant saved frame, the room, the saved time, and the moment within the
 video, with alternatives when they are useful.
 
+FoundIt is being prepared for the
+[RevenueCat Shipaton 2026](https://revenuecat-shipaton-2026.devpost.com/).
+
 Misplacing an everyday object often means retracing the same steps and searching
 the same space again. FoundIt is designed to reduce that friction for anyone,
 including caregivers and people experiencing everyday memory difficulties. It
@@ -16,7 +19,7 @@ does not diagnose, treat, or manage dementia or any other medical condition.
 
 1. Record one room sweep of up to 30 seconds.
 2. Name and save the video privately on the device.
-3. Choose **Upload for processing**. The local FastAPI service samples the
+3. Choose **Prepare this memory**. The local FastAPI service samples the
    video, rejects blurry and near-duplicate frames, and indexes retained frames
    with OpenCLIP.
 4. Type a question such as “Where are my glasses?” or optionally record a short
@@ -79,14 +82,23 @@ Prerequisites:
 - A current Node.js LTS release and npm
 - Python 3.11 or newer
 - FFmpeg and FFprobe (`brew install ffmpeg` on macOS)
-- Expo Go on a physical iOS or Android device
+- Expo Go for camera and interface checks, or a native development build for
+  RevenueCat Test Store purchases
 - `cloudflared` only if HTTPS tunnel testing is needed
 
-Install the mobile dependencies and create a local environment file:
+Install the mobile dependencies:
 
 ```bash
-npm install
-cp .env.example .env
+npm ci
+```
+
+Create a local `.env` file. Every `.env*` file is ignored by Git, so copy these
+placeholders from the documentation instead of committing an environment
+template:
+
+```dotenv
+EXPO_PUBLIC_API_BASE_URL=https://your-phone-reachable-api.example.com
+EXPO_PUBLIC_REVENUECAT_API_KEY=test_replace_with_your_public_sdk_key
 ```
 
 Install the backend:
@@ -96,17 +108,17 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
-cp .env.example .env
 ```
 
-For voice transcription, add a Gemini API key only to `backend/.env`:
+Create `backend/.env` only when overrides or voice transcription are needed.
+For voice transcription, add the Gemini API key there:
 
 ```dotenv
 GEMINI_API_KEY=replace_with_your_server_side_key
 ```
 
 Never put the Gemini key in an `EXPO_PUBLIC_` variable; Expo public variables
-are embedded in the mobile bundle.
+are embedded in the mobile bundle. Neither `.env` file should ever be committed.
 
 ## Three-terminal development workflow
 
@@ -205,6 +217,24 @@ Test Store outcome, and confirm a successful result changes **Plus active** to
 **yes**. Cancellation and failure must leave the account on Free. **Restore
 purchases** must grant access only when RevenueCat returns an active
 `foundit_plus` entitlement.
+
+## Shipaton readiness
+
+RevenueCat Shipaton 2026 is accepting submissions through September 30, 2026
+(Pacific Time). The current repository demonstrates the RevenueCat SDK,
+offering retrieval, localized pricing, Test Store purchase outcomes, restore,
+entitlement-driven access, and a real Plus benefit.
+
+Before final submission, the release still needs:
+
+- a first public App Store, Google Play, or Galaxy Store release during the
+  event window;
+- production store products and platform SDK keys instead of a Test Store key;
+- one verified purchase in the native development/store build;
+- final screenshots, a public demo video, and the store listing URL.
+
+The Test Store flow is development evidence; it is not presented as a real paid
+transaction or a completed store launch.
 
 ## Privacy and limitations
 

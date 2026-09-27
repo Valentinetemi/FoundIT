@@ -15,9 +15,14 @@ or location-description generation.
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
-cp .env.example .env
+touch .env
 uvicorn futurium_api.main:app --host 0.0.0.0 --port 8000 --reload --env-file .env
 ```
+
+The ignored `backend/.env` may remain empty because configuration has
+development defaults. Add overrides from the environment-variable table below
+or a Gemini key for voice transcription when needed. No environment file is
+tracked in Git.
 
 `0.0.0.0` lets a phone on the same trusted LAN reach the development server.
 There is no authentication in this prototype; do not expose it publicly.

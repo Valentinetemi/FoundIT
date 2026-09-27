@@ -6,6 +6,8 @@ This runbook keeps a hackathon demonstration short, honest, and repeatable.
 
 - Put the iPhone and Mac on the same reliable network, or start a fresh
   Cloudflare Quick Tunnel.
+- Use a native Expo development build—not Expo Go—for the RevenueCat Test Store
+  purchase segment.
 - Update `EXPO_PUBLIC_API_BASE_URL` with the current phone-reachable URL and
   restart Expo with `npm run start:clean`.
 - Start FastAPI and open `/health` from Safari on the phone.
@@ -32,6 +34,16 @@ This runbook keeps a hackathon demonstration short, honest, and repeatable.
 6. **Set expectations:** Explain that a result is where the object may have been
    last seen in the recording, not proof of its current location.
 
+## RevenueCat segment
+
+1. Open **FoundIt Plus** in the native development build.
+2. Show the monthly package and RevenueCat-provided price from the current
+   `default` offering.
+3. Complete a Test Store purchase and show that Plus activates only after
+   CustomerInfo contains the `foundit_plus` entitlement.
+4. Prepare a second space to demonstrate the unlimited-space benefit.
+5. State clearly that this is a Test Store transaction, not a real charge.
+
 ## Optional voice segment
 
 Tap **Voice**, record a short question, stop, and show that the transcription is
@@ -51,6 +63,8 @@ until that test passes.
   2026
 - Voice transcription: automated tests only
 - Weak/missing-object behavior: automated tests only
+- RevenueCat Test Store purchase on a native development build: requires final
+  physical-device verification
 
 ## Media checklist
 
