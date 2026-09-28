@@ -1,15 +1,14 @@
-# FoundIt processing API
+# FoundIt backend
 
-This local FastAPI service accepts one saved room sweep, extracts useful frames,
-indexes them for semantic text-to-frame search, and optionally transcribes a
-short voice query. It does not perform object detection, bounding-box creation,
-or location-description generation.
+This is the FastAPI service behind FoundIt. It turns a saved room sweep into a small set of searchable moments and can optionally transcribe a short voice query.
 
-## Requirements and setup
+The service samples frames from a video, removes blurry and repetitive images, creates OpenCLIP embeddings, and searches those embeddings with a text question. It does not detect objects, draw bounding boxes, or generate descriptions of where an item is located.
 
-- Python 3.11 or later
-- FFmpeg and FFprobe available on `PATH`
-- A Gemini API key for optional voice transcription
+### Quick start
+
+You will need Python 3.11 or later, plus FFmpeg and FFprobe on your `PATH`. A Gemini API key is only needed for voice transcription.
+
+From the `backend` directory:
 
 ```bash
 python3 -m venv .venv
@@ -19,33 +18,24 @@ touch .env
 uvicorn futurium_api.main:app --host 0.0.0.0 --port 8000 --reload --env-file .env
 ```
 
-The ignored `backend/.env` may remain empty because configuration has
-development defaults. Add overrides from the environment-variable table below
-or a Gemini key for voice transcription when needed. No environment file is
-tracked in Git.
+The `.env` file can stay empty because the service has development defaults. Add `GEMINI_API_KEY` if you want voice transcription, or use the configuration options below when you need to change processing behavior.
 
-`0.0.0.0` lets a phone on the same trusted LAN reach the development server.
-There is no authentication in this prototype; do not expose it publicly.
+Binding to `0.0.0.0` lets a phone on the same trusted network reach the service. This development backend does not have authentication, so do not expose it publicly.
 
-The first real processing job downloads the configured OpenCLIP weights. Allow
-extra time and network access for that first job. The model is lazily loaded
-once and reused for image and text inference for the lifetime of the server.
-Tests inject fakes and never download weights or contact Gemini.
+The first real processing job downloads the configured OpenCLIP weights and may take longer than later jobs. The model is loaded once and reused while the server is running.
 
-## Endpoints
+### API
 
-- `GET /health` — checks whether FFmpeg and FFprobe are available
-- `POST /sweeps` — accepts multipart fields `sweep_id` and `video`, then returns
-  HTTP 202 with the generated job manifest immediately after the bounded upload
-  is saved
-- `GET /sweeps/{job_id}` — returns the current processing manifest
-- `GET /sweeps/{job_id}/thumbnails/{frame_id}.jpg` — serves retained thumbnails
-- `POST /search` — embeds a text query and ranks ready, indexed frames from the
-  requested job or sweep scope
-- `POST /transcriptions` — accepts one bounded short-audio `audio` field and
-  returns only the transcription
+- `GET /health` checks whether FFmpeg and FFprobe are available.
+- `POST /sweeps` accepts a saved room video and starts a processing job.
+- `GET /sweeps/{job_id}` returns the latest processing status and manifest.
+- `GET /sweeps/{job_id}/thumbnails/{frame_id}.jpg` returns a retained thumbnail.
+- `POST /search` searches ready memories with a text query.
+- `POST /transcriptions` transcribes a short voice recording.
 
-Upload an MP4, MOV, M4V or WebM:
+#### Prepare a room sweep
+
+Upload an MP4, MOV, M4V, or WebM file with the mobile memory ID in `sweep_id`:
 
 ```bash
 curl -X POST http://localhost:8000/sweeps \
@@ -53,13 +43,17 @@ curl -X POST http://localhost:8000/sweeps \
   -F "video=@/absolute/path/to/room-sweep.mov;type=video/quicktime"
 ```
 
-Poll the job returned as `jobId`:
+The server saves the bounded upload, returns HTTP 202 with a `jobId`, and continues processing in a worker thread. Poll that job until its status becomes `ready` or `failed`:
 
 ```bash
 curl http://localhost:8000/sweeps/JOB_ID
 ```
 
-Search one or more ready jobs (the response is capped at three candidates):
+The manifest contains the mobile sweep ID, duration, processing status, sampling counts, retained frames, timestamps, thumbnail URLs, embedding model, and a structured error when something fails.
+
+#### Search prepared memories
+
+Search one or more ready jobs with a natural-language question:
 
 ```bash
 curl -X POST http://localhost:8000/search \
@@ -71,14 +65,20 @@ curl -X POST http://localhost:8000/search \
   }'
 ```
 
-Transcribe a short voice query:
+You can send either `jobIds` or `sweepIds`. The result limit must be between one and three.
+
+#### Transcribe a voice query
+
+Voice input accepts M4A, MP3, AAC, WAV, OGG, or WebM audio:
 
 ```bash
 curl -X POST http://localhost:8000/transcriptions \
   -F "audio=@/absolute/path/to/query.m4a;type=audio/m4a"
 ```
 
-Errors have a stable JSON shape:
+The response contains only the transcript. If Gemini is not configured, the endpoint returns a structured configuration error.
+
+All API errors use the same shape:
 
 ```json
 {
@@ -89,117 +89,61 @@ Errors have a stable JSON shape:
 }
 ```
 
-## Processing manifest
-
-The camel-cased response includes:
-
-- `jobId`, the generated server identifier
-- `sweepId`, the mobile SQLite identifier supplied by the client
-- `status`: `processing`, `ready` or `failed`
-- `duration`, in seconds
-- sampled, retained, blurry-rejected and duplicate-rejected frame counts
-- retained frames with `frameId`, `timestamp` and `thumbnailUrl`
-- `embeddingModel`, identifying the frame embedding model used for this job
-- a structured `error` when processing fails
-
-Client filenames are never used for storage. Job and frame identifiers are
-validated before paths are resolved. Uploads are streamed in bounded chunks and
-limited to 100 MiB by default.
-
-After the upload completes, processing is detached from the POST response and
-run in a worker thread with `asyncio.to_thread`. FFmpeg, FFprobe, and OpenCV do
-not run on FastAPI's event-loop thread, so `GET /sweeps/{job_id}` can continue to
-report `processing` while frame extraction is active. Structured JSON timing
-logs cover upload completion, the point at which the 202 response is ready,
-worker start and finish, and every status poll. Logs contain job metadata and
-timings but never upload filenames or private filesystem paths.
-
-## Frame selection
+### What happens during processing
 
 1. FFprobe reads the video duration.
-2. FFmpeg's `fps` filter samples approximately two frames per second.
-3. Each sample receives the timestamp `sample index / configured sample FPS`.
-4. OpenCV converts the image to grayscale and calculates
-   `variance(cv2.Laplacian(gray, cv2.CV_64F))`. A value below the configurable
-   default threshold of `100` is treated as visibly blurry. This is an
-   application heuristic, not a universal image-quality score, and should be
-   tuned using representative phone footage.
-5. A 64-bit difference hash is compared with the previous retained frame. A
-   Hamming distance of `5` or less is treated as a near-duplicate by default.
-6. Full retained JPEG frames and 320-pixel-wide thumbnails are stored.
-7. Ready frames are embedded by OpenCLIP `ViT-B-32` using
-   `laion2b_s34b_b79k` weights. Image embeddings are normalized before storage.
+2. FFmpeg samples about two frames per second by default.
+3. OpenCV rejects visibly blurry frames using Laplacian variance.
+4. A difference hash removes consecutive frames that are nearly identical.
+5. The service stores the retained JPEGs and smaller thumbnails.
+6. OpenCLIP embeds each retained frame for text-to-image search.
 
-The temporary uploaded source is removed in a `finally` path whether processing
-succeeds or fails. Temporary sampled frames are also deleted. Manifests,
-retained frames, thumbnails, and embeddings remain under `FUTURIUM_DATA_DIR`
-for semantic search. On a server restart, any job left in `processing` is recovered as
-`failed`, its temporary upload is removed, and the mobile client can retry the
-same saved memory.
+The blur threshold and duplicate distance are practical heuristics, not universal image-quality rules. They can be tuned through environment variables for different cameras and rooms.
 
-## Semantic index and ranking
+The temporary uploaded video and sampled working frames are deleted whether processing succeeds or fails. Retained frames, thumbnails, manifests, and embeddings remain under `FUTURIUM_DATA_DIR` so the memory stays searchable.
 
-Each job receives an atomic, compressed `embeddings.npz` file containing:
+If the server restarts during a job, that job is recovered as `failed`, its temporary upload is removed, and the mobile app can prepare the saved memory again.
 
-- schema version `1`
-- the exact OpenCLIP model identifier
-- stable `frame_000001`-style frame IDs
-- a two-dimensional normalized float32 embedding matrix
+### How search works
 
-`POST /search` accepts a normalized query, either `jobIds` or `sweepIds`, and a
-result limit from 1 to 3. Only jobs whose manifest status is `ready` are
-searched. The text vector is normalized, cosine similarity is calculated as a
-matrix dot product, and candidates are sorted by descending similarity with
-stable job/frame tie-breaking. The default confidence threshold is `0.23`.
-Scores below it still return reviewable visual candidates but set
-`confidentMatch` to `false`; clients must not claim the object was found.
+Each ready job has a compressed `embeddings.npz` index containing normalized OpenCLIP image vectors. A search question is embedded with the same model, normalized, and compared with those vectors using cosine similarity.
 
-Existing ready jobs created before semantic indexing have no `embeddings.npz`
-and are returned in `unindexedJobIds`. Reprocess those saved memories to index
-them. The current system searches whole frames only and cannot localize an
-object within a frame.
+Candidates are ranked from strongest to weakest. The default confidence threshold is `0.23`; lower-scoring frames can still be returned for review, but `confidentMatch` is set to `false` so the app does not claim the object was found.
 
-## Voice transcription and privacy
+FoundIt currently compares whole frames. It cannot identify the precise region containing an object, which is why small objects can be difficult to retrieve.
 
-`POST /transcriptions` accepts M4A, MP3, AAC, WAV, OGG, or WebM audio and limits
-the upload to 5 MiB by default. The route uses the injected `Transcriber`
-interface; production uses Gemini `gemini-3.5-transcribe`, while tests use a
-fake provider. The API never logs audio contents, transcripts, uploaded client
-filenames, API keys, or private filesystem paths.
+### Voice and privacy
 
-The server stores the incoming audio under a generated temporary name, uploads
-it through Gemini's Files API, returns only a transcript of at most 200
-characters, requests immediate deletion of the Gemini file, and removes the
-local temporary file in a `finally` block whether transcription succeeds or
-fails. Gemini credentials stay on the backend; they are never included in the
-Expo bundle. This prototype does not claim end-to-end encryption or medical
-compliance.
+Voice uploads are limited to 5 MiB by default. The server saves an upload under a generated temporary name, sends it to Gemini, returns a transcript of at most 200 characters, asks Gemini to delete its copy, and removes the local file whether transcription succeeds or fails.
 
-The `futurium_api` Python module, `futurium-api` distribution name, and
-`FUTURIUM_*` environment-variable prefix are intentionally retained for
-backward compatibility with existing development environments. They are
-internal identifiers; the product and API title are FoundIt.
+Gemini credentials stay on the backend and are never included in the Expo app. The API does not log room video, audio contents, transcripts, embeddings, credentials, client filenames, or private file paths.
 
-## Environment variables
+Client filenames are not used for storage, job and frame identifiers are validated, and video uploads are limited to 100 MiB by default. This is still a hackathon prototype: it does not claim end-to-end encryption, medical compliance, or production-ready security.
 
-| Variable                               |                 Default | Purpose                          |
-| -------------------------------------- | ----------------------: | -------------------------------- |
-| `FUTURIUM_DATA_DIR`                    |                `./data` | Manifest and retained-frame root |
-| `FUTURIUM_MAX_UPLOAD_BYTES`            |             `104857600` | Maximum video upload bytes       |
-| `FUTURIUM_SAMPLE_FPS`                  |                     `2` | Approximate samples per second   |
-| `FUTURIUM_BLUR_THRESHOLD`              |                   `100` | Minimum Laplacian variance       |
-| `FUTURIUM_DUPLICATE_HASH_DISTANCE`     |                     `5` | Maximum duplicate dHash distance |
-| `FUTURIUM_THUMBNAIL_WIDTH`             |                   `320` | Thumbnail width in pixels        |
-| `FUTURIUM_PROCESS_TIMEOUT_SECONDS`     |                   `180` | FFmpeg/FFprobe timeout           |
-| `FUTURIUM_EMBEDDING_MODEL`             |              `ViT-B-32` | OpenCLIP architecture            |
-| `FUTURIUM_EMBEDDING_PRETRAINED`        |     `laion2b_s34b_b79k` | OpenCLIP weight identifier       |
-| `FUTURIUM_EMBEDDING_DEVICE`            |                  `auto` | MPS, CUDA, then CPU selection    |
-| `FUTURIUM_SEARCH_CONFIDENCE_THRESHOLD` |                  `0.23` | Confident-match cutoff           |
-| `GEMINI_API_KEY`                       |                       — | Server-only Gemini credential    |
-| `FUTURIUM_GEMINI_TRANSCRIPTION_MODEL`  | `gemini-3.5-transcribe` | Voice transcription model        |
-| `FUTURIUM_MAX_AUDIO_UPLOAD_BYTES`      |               `5242880` | Maximum voice upload bytes       |
+The internal names `futurium_api`, `futurium-api`, and `FUTURIUM_*` remain for compatibility with existing development environments. The product name is FoundIt.
 
-## Tests and checks
+### Configuration
+
+| Variable                               |                 Default | Purpose                       |
+| -------------------------------------- | ----------------------: | ----------------------------- |
+| `FUTURIUM_DATA_DIR`                    |                `./data` | Retained processing data      |
+| `FUTURIUM_MAX_UPLOAD_BYTES`            |             `104857600` | Maximum video upload size     |
+| `FUTURIUM_SAMPLE_FPS`                  |                     `2` | Frames sampled per second     |
+| `FUTURIUM_BLUR_THRESHOLD`              |                   `100` | Minimum Laplacian variance    |
+| `FUTURIUM_DUPLICATE_HASH_DISTANCE`     |                     `5` | Near-duplicate dHash distance |
+| `FUTURIUM_THUMBNAIL_WIDTH`             |                   `320` | Thumbnail width in pixels     |
+| `FUTURIUM_PROCESS_TIMEOUT_SECONDS`     |                   `180` | FFmpeg and FFprobe timeout    |
+| `FUTURIUM_EMBEDDING_MODEL`             |              `ViT-B-32` | OpenCLIP architecture         |
+| `FUTURIUM_EMBEDDING_PRETRAINED`        |     `laion2b_s34b_b79k` | OpenCLIP weights              |
+| `FUTURIUM_EMBEDDING_DEVICE`            |                  `auto` | MPS, CUDA, then CPU selection |
+| `FUTURIUM_SEARCH_CONFIDENCE_THRESHOLD` |                  `0.23` | Confident-match threshold     |
+| `GEMINI_API_KEY`                       |                       — | Server-only Gemini credential |
+| `FUTURIUM_GEMINI_TRANSCRIPTION_MODEL`  | `gemini-3.5-transcribe` | Voice transcription model     |
+| `FUTURIUM_MAX_AUDIO_UPLOAD_BYTES`      |               `5242880` | Maximum voice upload size     |
+
+### Tests
+
+Run the backend checks from this directory:
 
 ```bash
 .venv/bin/ruff format --check .
@@ -207,11 +151,4 @@ internal identifiers; the product and API title are FoundIt.
 .venv/bin/pytest
 ```
 
-The frame-selection fixture is generated from six synthetic frames at runtime.
-With the default settings, the test asserts 6 sampled frames, 3 retained frames,
-1 blur rejection and 2 consecutive-duplicate rejections. A second generated
-video contains distinguishable glasses, mug, and keys frames; the injected fake
-embedder verifies that “Where is my blue mug?” ranks the mug frame first. Voice
-tests inject a fake transcriber and verify success, validation, provider failure,
-and temporary-file cleanup. No fixture video is stored in Git, no model weights
-are downloaded, and no Gemini request is sent by the test suite.
+The tests generate their own short videos, use fake embedding and transcription providers, and do not download model weights or contact Gemini. They cover frame filtering, background processing, cleanup, semantic ranking, low-confidence results, upload validation, voice transcription, and structured failures.
