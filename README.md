@@ -6,7 +6,7 @@ FoundIt gives physical spaces a searchable visual memory. I built it so a short 
 
 [Watch the FoundIt demo](https://youtube.com/shorts/7yG1WsOOU2I)
 
-## Why I built it
+### Why I built it
 
 My grandmother is always looking for something she just put down. Her purse, her glasses, her keys. Sometimes the search ends quickly. Other times, it becomes stressful for everyone around her.
 
@@ -14,7 +14,7 @@ That made me wonder: what if the room could remember for her?
 
 I built FoundIt as a supportive tool for families and caregivers. It does not diagnose, treat, or manage dementia.
 
-## How it works
+### How it works
 
 I record a short sweep of a room, name it, and save it as a memory. When I choose to prepare that memory, FoundIt keeps the clearest, most useful moments and makes them searchable.
 
@@ -22,23 +22,23 @@ Later, I can type or speak a question such as “Where are my EarPods?” FoundI
 
 FoundIt reports where an object may have been last seen. It does not claim that the object is still there.
 
-## How I built it
+### How I built it
 
 I used Expo, React Native, Expo Router, and TypeScript for the mobile app, with SQLite storing local memory records and metadata. A FastAPI service written in Python handles preparation and search: FFmpeg samples frames, OpenCV filters blurry and near-duplicate images, and OpenCLIP creates visual embeddings for cosine-similarity search. Gemini provides optional voice transcription.
 
-## RevenueCat Plus
+### RevenueCat Plus
 
 RevenueCat controls a real product boundary in FoundIt. Free users can prepare one physical space and search memories already prepared. FoundIt Plus unlocks unlimited prepared spaces, with search across every prepared memory.
 
 The app loads the current RevenueCat offering and its localised price. Purchases and restoration depend on RevenueCat CustomerInfo, and Plus unlocks only when RevenueCat returns the active `foundit_plus` entitlement. I successfully tested the Test Store purchase flow on a physical iPhone.
 
-## What worked and what did not
+### What worked and what did not
 
 In a physical test, FoundIt successfully found EarPods, a mouse, and a pen. It missed a pair of glasses because they occupied only a small part of the frame.
 
 The current system compares whole frames. Region-level embeddings or object detection are the next technical step for retrieving smaller objects more reliably.
 
-## Privacy and responsible use
+### Privacy and responsible use
 
 - Room videos remain in private device storage until the user chooses processing.
 - Temporary uploaded videos are deleted after processing.
@@ -48,7 +48,7 @@ The current system compares whole frames. Region-level embeddings or object dete
 - The development backend does not yet have production authentication.
 - FoundIt must not be treated as a medical or safety-critical system.
 
-## Run locally
+### Run locally
 
 Install the mobile dependencies:
 
@@ -86,16 +86,16 @@ npm run start:clean
 
 See [backend/README.md](backend/README.md) for detailed backend setup and testing.
 
-## What is next
+### What is next
 
 I want to improve small-object retrieval, move more processing onto the device, and explore the long-term idea of a lightweight wearable memory assistant.
 
 FoundIt is the first step: proof that a physical space can remember.
 
-## Hackathon
+### Hackathon
 
 I’m Temiloluwa Valentine, and I built FoundIt solo for RevenueCat Ship-a-ton 2026.
 
-## License
+### License
 
 FoundIt is available under the [MIT License](LICENSE).
